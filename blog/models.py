@@ -106,3 +106,15 @@ class SupportMessage(models.Model):
 
     def __str__(self):
         return f"Message from {self.sender} in Session {self.session.id}"
+
+
+class ClientCard(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='client_cards')
+    name = models.CharField(max_length=100)
+    age = models.IntegerField()
+    goals = models.TextField()
+    challenges = models.TextField()
+    created = models.DateTimeField(auto_now_add=True)
+
+    def str(self):
+        return f"ClientCard for {self.user.username}"

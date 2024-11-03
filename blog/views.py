@@ -1,12 +1,14 @@
+from django.shortcuts import get_object_or_404
 from django.utils import timezone
 
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from .models import User, SubscriptionPlan, UserSubscription, Payment, PaymentMethod, Consent, Method, SupportSession, \
-    SupportMessage
+    SupportMessage, ClientCard
 from .serializers import UserRegistrationSerializer, ConsentSerializer, UserSubscriptionSerializer, \
-    SubscriptionPlanSerializer, PaymentSerializer, PaymentMethodSerializer, MethodSerializer, UserCardSerializer
+    SubscriptionPlanSerializer, PaymentSerializer, PaymentMethodSerializer, MethodSerializer, UserCardSerializer, \
+    ClientCardSerializer
 
 
 class UserRegistrationView(APIView):
@@ -306,3 +308,35 @@ class GetSupportMessagesView(APIView):
             for msg in messages
         ]
         return Response({'messages': message_data}, status=status.HTTP_200_OK)
+
+class ClientCardListCreateView(APIView):
+    def get(self, request):
+        client_cards = ClientCard.objects.all()
+        serializer = ClientCardSerializer(client_cards, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    def post(self, request):
+        serializer = ClientCardSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class ClientCardView(APIView):
+    def get(self, request, telegram_id):
+        user = get_object_or_404(User, telegram_id=telegram_id)
+        try:
+            client_card = ClientCard.objects.get(user=user)
+            serializer = ClientCardSerializer(client_card)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        except ClientCard.DoesNotExist:
+            return Response({'error': 'Kartangiz topilmadi. Iltimos, yangi karta yarating.'}, status=status.HTTP_404_NOT_FOUND)
+
+    def post(self, request, telegram_id):
+        user = get_object_or_404(User, telegram_id=telegram_id)
+        serializer = ClientCardSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save(user=user)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
