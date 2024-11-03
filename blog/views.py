@@ -3,9 +3,10 @@ from django.utils import timezone
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from .models import User, SubscriptionPlan, UserSubscription, Payment, PaymentMethod, Consent
+from .models import User, SubscriptionPlan, UserSubscription, Payment, PaymentMethod, Consent, Method, SupportSession, \
+    SupportMessage
 from .serializers import UserRegistrationSerializer, ConsentSerializer, UserSubscriptionSerializer, \
-    SubscriptionPlanSerializer, PaymentSerializer, PaymentMethodSerializer
+    SubscriptionPlanSerializer, PaymentSerializer, PaymentMethodSerializer, MethodSerializer, UserCardSerializer
 
 
 class UserRegistrationView(APIView):
@@ -40,6 +41,7 @@ class ConsentView(APIView):
 
         return Response({'message': 'Rozilik holati muvaffaqiyatli saqlandi.'}, status=status.HTTP_200_OK)
 
+
 class ConsentStatusView(APIView):
     def get(self, request, telegram_id):
         try:
@@ -55,7 +57,6 @@ class ConsentStatusView(APIView):
             }, status=status.HTTP_200_OK)
         except Consent.DoesNotExist:
             return Response({'consent_given': False, 'consent_date': None}, status=status.HTTP_200_OK)
-
 
 
 class SubscriptionPlanListView(APIView):
@@ -148,8 +149,160 @@ class PaymentStatusView(APIView):
         serializer = PaymentSerializer(payment)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
+
 class PaymentMethodListView(APIView):
     def get(self, request):
         methods = PaymentMethod.objects.all()
         serializer = PaymentMethodSerializer(methods, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class MethodsListView(APIView):
+    def get(self, request):
+        methods = Method.objects.all()
+        serializer = MethodSerializer(methods, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class MethodDetailView(APIView):
+    def get(self, request, method_id):
+        try:
+            method = Method.objects.get(id=method_id)
+            serializer = MethodSerializer(method)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        except Method.DoesNotExist:
+            return Response({'error': 'Metod topilmadi.'}, status=status.HTTP_404_NOT_FOUND)
+
+
+class StatisticsView(APIView):
+    def get(self, request, telegram_id):
+        try:
+            user = User.objects.get(telegram_id=telegram_id)
+        except User.DoesNotExist:
+            return Response({'error': 'Foydalanuvchi topilmadi.'}, status=status.HTTP_404_NOT_FOUND)
+
+        statistics = {
+            "total_subscriptions": UserSubscription.objects.filter(user=user).count(),
+            "total_payments": Payment.objects.filter(user=user, status='completed').count(),
+            "last_subscription": UserSubscription.objects.filter(user=user).order_by('-end_date').first(),
+        }
+        return Response(statistics, status=status.HTTP_200_OK)
+
+
+class ProfileView(APIView):
+    def get(self, request, telegram_id):
+        try:
+            user = User.objects.get(telegram_id=telegram_id)
+        except User.DoesNotExist:
+            return Response({'error': 'Foydalanuvchi topilmadi.'}, status=status.HTTP_404_NOT_FOUND)
+
+        profile_data = {
+            "telegram_id": user.telegram_id,
+            "username": user.username,
+            "created": user.created,
+            "current_subscription": UserSubscription.objects.filter(user=user, end_date__gte=timezone.now()).first(),
+            "total_payments": Payment.objects.filter(user=user, status='completed').count(),
+        }
+        return Response(profile_data, status=status.HTTP_200_OK)
+
+
+class UserCardView(APIView):
+    def post(self, request, telegram_id):
+        try:
+            user = User.objects.get(telegram_id=telegram_id)
+        except User.DoesNotExist:
+            return Response({'error': 'Foydalanuvchi topilmadi.'}, status=status.HTTP_404_NOT_FOUND)
+
+        card_data = {
+            "user": user.id,
+            "card_number": request.data.get("card_number"),
+            "card_expiry": request.data.get("card_expiry"),
+            "cardholder_name": request.data.get("cardholder_name"),
+        }
+        serializer = UserCardSerializer(data=card_data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class StartSupportSessionView(APIView):
+    def post(self, request, telegram_id):
+        try:
+            user = User.objects.get(telegram_id=telegram_id)
+        except User.DoesNotExist:
+            return Response({'error': 'Foydalanuvchi topilmadi.'}, status=status.HTTP_404_NOT_FOUND)
+
+        session, created = SupportSession.objects.get_or_create(user=user, is_active=True)
+        return Response({
+            'session_id': session.id,
+            'message': 'Support sessiyasi boshlandi.',
+        }, status=status.HTTP_200_OK)
+
+
+import requests
+
+TELEGRAM_BOT_TOKEN = 'YOUR_TELEGRAM_BOT_TOKEN'
+MANAGER_CHAT_ID = 'MANAGER_CHAT_ID'
+
+
+def send_telegram_message(chat_id, text):
+    url = f'https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage'
+    payload = {
+        'chat_id': chat_id,
+        'text': text
+    }
+    response = requests.post(url, json=payload)
+    return response.json()
+
+
+class SendSupportMessageView(APIView):
+    def post(self, request):
+        session_id = request.data.get("session_id")
+        sender = request.data.get("sender")  # 'user' yoki 'manager'
+        message_text = request.data.get("message_text")
+
+        try:
+            session = SupportSession.objects.get(id=session_id, is_active=True)
+        except SupportSession.DoesNotExist:
+            return Response({'error': 'Sessiya topilmadi yoki yakunlangan.'}, status=status.HTTP_404_NOT_FOUND)
+
+        message = SupportMessage.objects.create(
+            session=session,
+            sender=sender,
+            message_text=message_text
+        )
+
+        if sender == "user":
+            response = send_telegram_message(MANAGER_CHAT_ID,
+                                             f"User {session.user.username or session.user.telegram_id}: {message_text}")
+            if not response.get("ok"):
+                return Response({'error': 'Menejerga xabar yuborishda xatolik yuz berdi.'},
+                                status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        elif sender == "manager":
+            user_chat_id = session.user.telegram_id
+            response = send_telegram_message(user_chat_id, f"Manager: {message_text}")
+            if not response.get("ok"):
+                return Response({'error': 'Foydalanuvchiga xabar yuborishda xatolik yuz berdi.'},
+                                status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        return Response({'message': 'Xabar yuborildi.'}, status=status.HTTP_201_CREATED)
+
+
+class GetSupportMessagesView(APIView):
+    def get(self, request, session_id):
+        try:
+            session = SupportSession.objects.get(id=session_id)
+        except SupportSession.DoesNotExist:
+            return Response({'error': 'Sessiya topilmadi.'}, status=status.HTTP_404_NOT_FOUND)
+
+        messages = SupportMessage.objects.filter(session=session).order_by('timestamp')
+        message_data = [
+            {
+                'sender': msg.sender,
+                'message_text': msg.message_text,
+                'timestamp': msg.timestamp
+            }
+            for msg in messages
+        ]
+        return Response({'messages': message_data}, status=status.HTTP_200_OK)

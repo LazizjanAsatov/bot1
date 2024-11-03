@@ -67,3 +67,42 @@ class Payment(models.Model):
 
     def __str__(self):
         return f"{self.user} - {self.subscription_plan.name} - {self.payment_method.name} - {self.status}"
+
+
+class Method(models.Model):
+    name = models.CharField(max_length=100)
+    description = models.TextField()
+    details = models.TextField(blank=True, null=True)
+
+    def __str__(self):
+        return self.name
+
+
+class UserCard(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="cards")
+    card_number = models.CharField(max_length=16)
+    card_expiry = models.CharField(max_length=5)
+    cardholder_name = models.CharField(max_length=100)
+
+    def __str__(self):
+        return f"{self.cardholder_name} - {self.card_number[-4:]}"
+
+
+class SupportSession(models.Model):
+    user = models.ForeignKey('User', on_delete=models.CASCADE, related_name="support_sessions")
+    is_active = models.BooleanField(default=True)
+    started_at = models.DateTimeField(default=timezone.now)
+    ended_at = models.DateTimeField(null=True, blank=True)
+
+    def __str__(self):
+        return f"Support Session for {self.user.username or self.user.telegram_id} - Active: {self.is_active}"
+
+
+class SupportMessage(models.Model):
+    session = models.ForeignKey(SupportSession, on_delete=models.CASCADE, related_name="messages")
+    sender = models.CharField(max_length=10)
+    message_text = models.TextField()
+    timestamp = models.DateTimeField(default=timezone.now)
+
+    def __str__(self):
+        return f"Message from {self.sender} in Session {self.session.id}"

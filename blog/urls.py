@@ -1,6 +1,7 @@
 from django.urls import path
 from .views import UserRegistrationView, ConsentView, SubscriptionPlanListView, SubscribeView, SubscriptionStatusView, \
-    PaymentMethodListView, MakePaymentView, PaymentStatusView, ConsentStatusView
+    PaymentMethodListView, MakePaymentView, PaymentStatusView, ConsentStatusView, MethodsListView, MethodDetailView, \
+    StatisticsView, ProfileView, UserCardView, StartSupportSessionView, SendSupportMessageView, GetSupportMessagesView
 
 urlpatterns = [
     path('register/', UserRegistrationView.as_view(),name='register'),
@@ -12,4 +13,14 @@ urlpatterns = [
     path('payment-methods/', PaymentMethodListView.as_view(), name='payment-methods'),
     path('make-payment/<str:telegram_id>/', MakePaymentView.as_view(), name='make-payment'),
     path('payment-status/<str:transaction_id>/', PaymentStatusView.as_view(), name='payment-status'),
+    path('methods/', MethodsListView.as_view(), name='methods-list'),
+    path('methods/<int:method_id>/', MethodDetailView.as_view(), name='method-detail'),
+    path('statistics/<str:telegram_id>/', StatisticsView.as_view(), name='statistics'),
+    path('profile/<str:telegram_id>/', ProfileView.as_view(), name='profile'),
+    path('add-card/<str:telegram_id>/', UserCardView.as_view(), name='add-card'),
+    path('support/start-session/<str:telegram_id>/', StartSupportSessionView.as_view(), name='start-support-session'),
+    path('support/send-message/', SendSupportMessageView.as_view(), name='send-support-message'),
+    path('support/get-messages/<int:session_id>/', GetSupportMessagesView.as_view(), name='get-support-messages'),
+
+
 ]

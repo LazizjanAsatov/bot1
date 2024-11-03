@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import User, Consent, SubscriptionPlan, UserSubscription, PaymentMethod, Payment
+from .models import User, Consent, SubscriptionPlan, UserSubscription, PaymentMethod, Payment, Method, UserCard
 
 
 class UserRegistrationSerializer(serializers.ModelSerializer):
@@ -38,3 +38,14 @@ class PaymentSerializer(serializers.ModelSerializer):
     class Meta:
         model = Payment
         fields = ['user', 'subscription_plan', 'payment_method', 'amount', 'transaction_id', 'status', 'payment_date']
+
+class MethodSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Method
+        fields = ['id', 'name', 'description', 'details']
+
+class UserCardSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = UserCard
+        fields = ['user', 'card_number', 'card_expiry', 'cardholder_name']
+
