@@ -2,7 +2,7 @@ from django.urls import path
 from .views import UserRegistrationView, ConsentView, SubscriptionPlanListView, SubscribeView, SubscriptionStatusView, \
     PaymentMethodListView, MakePaymentView, PaymentStatusView, ConsentStatusView, MethodsListView, MethodDetailView, \
     StatisticsView, ProfileView, UserCardView, StartSupportSessionView, SendSupportMessageView, GetSupportMessagesView, \
-    ClientCardView
+    ClientCardView, AdviceView
 
 urlpatterns = [
     path('register/', UserRegistrationView.as_view(),name='register'),
@@ -22,5 +22,7 @@ urlpatterns = [
     path('support/start-session/<str:telegram_id>/', StartSupportSessionView.as_view(), name='start-support-session'),
     path('support/send-message/', SendSupportMessageView.as_view(), name='send-support-message'),
     path('support/get-messages/<int:session_id>/', GetSupportMessagesView.as_view(), name='get-support-messages'),
+    path('support/advice/', AdviceView.as_view(), name='advice'),
     path('client-cards/<str:telegram_id>/', ClientCardView.as_view(), name='client-card'),
+    path('advice/', AdviceView.as_view(), name='advice'),
 ]

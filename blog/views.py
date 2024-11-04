@@ -5,10 +5,10 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from .models import User, SubscriptionPlan, UserSubscription, Payment, PaymentMethod, Consent, Method, SupportSession, \
-    SupportMessage, ClientCard
+    SupportMessage, ClientCard, Advice
 from .serializers import UserRegistrationSerializer, ConsentSerializer, UserSubscriptionSerializer, \
     SubscriptionPlanSerializer, PaymentSerializer, PaymentMethodSerializer, MethodSerializer, UserCardSerializer, \
-    ClientCardSerializer
+    ClientCardSerializer, AdviceSerializer
 
 
 class UserRegistrationView(APIView):
@@ -20,19 +20,20 @@ class UserRegistrationView(APIView):
                 defaults={'username': serializer.validated_data.get('username', '')}
             )
             status_code = status.HTTP_201_CREATED if created else status.HTTP_200_OK
-            return Response({'message': 'Foydalanuvchi muvaffaqiyatli ro\'yxatdan o\'tdi.'}, status=status_code)
+            return Response({'message': 'Пользователь успешно зарегистрирован.'}, status=status_code)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 class ConsentView(APIView):
+    def get(self, request, telegram_id):
+        user = get_object_or_404(User, telegram_id=telegram_id)
+        consent, created = Consent.objects.get_or_create(user=user)
+        serializer = ConsentSerializer(consent)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
     def post(self, request, telegram_id):
-        try:
-            user = User.objects.get(telegram_id=telegram_id)
-        except User.DoesNotExist:
-            return Response({'error': 'Foydalanuvchi topilmadi.'}, status=status.HTTP_404_NOT_FOUND)
-
+        user = get_object_or_404(User, telegram_id=telegram_id)
         consent_given = request.data.get('consent_given', False)
-
         consent, created = Consent.objects.update_or_create(
             user=user,
             defaults={
@@ -40,8 +41,8 @@ class ConsentView(APIView):
                 'consent_date': timezone.now() if consent_given else None
             }
         )
-
-        return Response({'message': 'Rozilik holati muvaffaqiyatli saqlandi.'}, status=status.HTTP_200_OK)
+        message = "Согласие получено." if consent_given else "Согласие отозвано."
+        return Response({'message': message}, status=status.HTTP_200_OK)
 
 
 class ConsentStatusView(APIView):
@@ -49,8 +50,7 @@ class ConsentStatusView(APIView):
         try:
             user = User.objects.get(telegram_id=telegram_id)
         except User.DoesNotExist:
-            return Response({'error': 'Foydalanuvchi topilmadi.'}, status=status.HTTP_404_NOT_FOUND)
-
+            return Response({'error': 'Пользователь не найден.'}, status=status.HTTP_404_NOT_FOUND)
         try:
             consent = Consent.objects.get(user=user)
             return Response({
@@ -73,17 +73,14 @@ class SubscribeView(APIView):
         try:
             user = User.objects.get(telegram_id=telegram_id)
         except User.DoesNotExist:
-            return Response({'error': 'Foydalanuvchi topilmadi.'}, status=status.HTTP_404_NOT_FOUND)
-
+            return Response({'error': 'Пользователь не найден.'}, status=status.HTTP_404_NOT_FOUND)
         plan_id = request.data.get('plan_id')
         if not plan_id:
-            return Response({'error': 'Obuna turi ID sini kiriting.'}, status=status.HTTP_400_BAD_REQUEST)
-
+            return Response({'error': 'Введите ID типа подписки.'}, status=status.HTTP_400_BAD_REQUEST)
         try:
             plan = SubscriptionPlan.objects.get(id=plan_id)
         except SubscriptionPlan.DoesNotExist:
-            return Response({'error': 'Obuna turi topilmadi.'}, status=status.HTTP_404_NOT_FOUND)
-
+            return Response({'error': 'Тип подписки не найден.'}, status=status.HTTP_404_NOT_FOUND)
         user_subscription = UserSubscription.objects.create(user=user, plan=plan)
         serializer = UserSubscriptionSerializer(user_subscription)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
@@ -94,13 +91,12 @@ class SubscriptionStatusView(APIView):
         try:
             user = User.objects.get(telegram_id=telegram_id)
         except User.DoesNotExist:
-            return Response({'error': 'Foydalanuvchi topilmadi.'}, status=status.HTTP_404_NOT_FOUND)
-
+            return Response({'error': 'Пользователь не найден.'}, status=status.HTTP_404_NOT_FOUND)
         user_subscription = UserSubscription.objects.filter(user=user).order_by('-end_date').first()
         if user_subscription and user_subscription.end_date > timezone.now():
             serializer = UserSubscriptionSerializer(user_subscription)
             return Response(serializer.data, status=status.HTTP_200_OK)
-        return Response({'message': 'Foydalanuvchi obuna emas yoki obuna muddati tugagan.'}, status=status.HTTP_200_OK)
+        return Response({'message': 'Пользователь не подписан или срок подписки истек.'}, status=status.HTTP_200_OK)
 
 
 class MakePaymentView(APIView):
@@ -108,27 +104,21 @@ class MakePaymentView(APIView):
         try:
             user = User.objects.get(telegram_id=telegram_id)
         except User.DoesNotExist:
-            return Response({'error': 'Foydalanuvchi topilmadi.'}, status=status.HTTP_404_NOT_FOUND)
-
+            return Response({'error': 'Пользователь не найден.'}, status=status.HTTP_404_NOT_FOUND)
         plan_id = request.data.get('subscription_plan')
         method_id = request.data.get('payment_method')
         transaction_id = request.data.get('transaction_id')
-
         if not transaction_id:
-            return Response({'error': 'Tranzaksiya ID sini kiriting.'}, status=status.HTTP_400_BAD_REQUEST)
-
+            return Response({'error': 'Введите ID транзакции.'}, status=status.HTTP_400_BAD_REQUEST)
         try:
             subscription_plan = SubscriptionPlan.objects.get(id=plan_id)
         except SubscriptionPlan.DoesNotExist:
-            return Response({'error': 'Obuna turi topilmadi.'}, status=status.HTTP_404_NOT_FOUND)
-
+            return Response({'error': 'Тип подписки не найден.'}, status=status.HTTP_404_NOT_FOUND)
         try:
             payment_method = PaymentMethod.objects.get(id=method_id)
         except PaymentMethod.DoesNotExist:
-            return Response({'error': 'To\'lov usuli topilmadi.'}, status=status.HTTP_404_NOT_FOUND)
-
+            return Response({'error': 'Способ оплаты не найден.'}, status=status.HTTP_404_NOT_FOUND)
         amount = subscription_plan.price
-
         payment = Payment.objects.create(
             user=user,
             subscription_plan=subscription_plan,
@@ -146,8 +136,7 @@ class PaymentStatusView(APIView):
         try:
             payment = Payment.objects.get(transaction_id=transaction_id)
         except Payment.DoesNotExist:
-            return Response({'error': 'Tranzaksiya topilmadi.'}, status=status.HTTP_404_NOT_FOUND)
-
+            return Response({'error': 'Транзакция не найдена.'}, status=status.HTTP_404_NOT_FOUND)
         serializer = PaymentSerializer(payment)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
@@ -173,7 +162,7 @@ class MethodDetailView(APIView):
             serializer = MethodSerializer(method)
             return Response(serializer.data, status=status.HTTP_200_OK)
         except Method.DoesNotExist:
-            return Response({'error': 'Metod topilmadi.'}, status=status.HTTP_404_NOT_FOUND)
+            return Response({'error': 'Метод не найден.'}, status=status.HTTP_404_NOT_FOUND)
 
 
 class StatisticsView(APIView):
@@ -181,8 +170,7 @@ class StatisticsView(APIView):
         try:
             user = User.objects.get(telegram_id=telegram_id)
         except User.DoesNotExist:
-            return Response({'error': 'Foydalanuvchi topilmadi.'}, status=status.HTTP_404_NOT_FOUND)
-
+            return Response({'error': 'Пользователь не найден.'}, status=status.HTTP_404_NOT_FOUND)
         statistics = {
             "total_subscriptions": UserSubscription.objects.filter(user=user).count(),
             "total_payments": Payment.objects.filter(user=user, status='completed').count(),
@@ -196,8 +184,7 @@ class ProfileView(APIView):
         try:
             user = User.objects.get(telegram_id=telegram_id)
         except User.DoesNotExist:
-            return Response({'error': 'Foydalanuvchi topilmadi.'}, status=status.HTTP_404_NOT_FOUND)
-
+            return Response({'error': 'Пользователь не найден.'}, status=status.HTTP_404_NOT_FOUND)
         profile_data = {
             "telegram_id": user.telegram_id,
             "username": user.username,
@@ -213,8 +200,7 @@ class UserCardView(APIView):
         try:
             user = User.objects.get(telegram_id=telegram_id)
         except User.DoesNotExist:
-            return Response({'error': 'Foydalanuvchi topilmadi.'}, status=status.HTTP_404_NOT_FOUND)
-
+            return Response({'error': 'Пользователь не найден.'}, status=status.HTTP_404_NOT_FOUND)
         card_data = {
             "user": user.id,
             "card_number": request.data.get("card_number"),
@@ -230,65 +216,32 @@ class UserCardView(APIView):
 
 class StartSupportSessionView(APIView):
     def post(self, request, telegram_id):
-        try:
-            user = User.objects.get(telegram_id=telegram_id)
-        except User.DoesNotExist:
-            return Response({'error': 'Foydalanuvchi topilmadi.'}, status=status.HTTP_404_NOT_FOUND)
-
-        session, created = SupportSession.objects.get_or_create(user=user, is_active=True)
+        user, created = User.objects.get_or_create(telegram_id=telegram_id)
+        session, session_created = SupportSession.objects.get_or_create(user=user, is_active=True)
+        if not session_created:
+            session.is_active = True
+            session.save()
         return Response({
-            'session_id': session.id,
-            'message': 'Support sessiyasi boshlandi.',
+            "session_id": session.id,
+            "message": "Сессия поддержки успешно начата."
         }, status=status.HTTP_200_OK)
-
-
-import requests
-
-TELEGRAM_BOT_TOKEN = 'YOUR_TELEGRAM_BOT_TOKEN'
-MANAGER_CHAT_ID = 'MANAGER_CHAT_ID'
-
-
-def send_telegram_message(chat_id, text):
-    url = f'https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage'
-    payload = {
-        'chat_id': chat_id,
-        'text': text
-    }
-    response = requests.post(url, json=payload)
-    return response.json()
 
 
 class SendSupportMessageView(APIView):
     def post(self, request):
         session_id = request.data.get("session_id")
-        sender = request.data.get("sender")  # 'user' yoki 'manager'
+        sender = request.data.get("sender")
         message_text = request.data.get("message_text")
-
         try:
             session = SupportSession.objects.get(id=session_id, is_active=True)
         except SupportSession.DoesNotExist:
-            return Response({'error': 'Sessiya topilmadi yoki yakunlangan.'}, status=status.HTTP_404_NOT_FOUND)
-
+            return Response({'error': 'Сессия не найдена или завершена.'}, status=status.HTTP_404_NOT_FOUND)
         message = SupportMessage.objects.create(
             session=session,
             sender=sender,
             message_text=message_text
         )
-
-        if sender == "user":
-            response = send_telegram_message(MANAGER_CHAT_ID,
-                                             f"User {session.user.username or session.user.telegram_id}: {message_text}")
-            if not response.get("ok"):
-                return Response({'error': 'Menejerga xabar yuborishda xatolik yuz berdi.'},
-                                status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        elif sender == "manager":
-            user_chat_id = session.user.telegram_id
-            response = send_telegram_message(user_chat_id, f"Manager: {message_text}")
-            if not response.get("ok"):
-                return Response({'error': 'Foydalanuvchiga xabar yuborishda xatolik yuz berdi.'},
-                                status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-        return Response({'message': 'Xabar yuborildi.'}, status=status.HTTP_201_CREATED)
+        return Response({'message': 'Сообщение успешно отправлено.'}, status=status.HTTP_201_CREATED)
 
 
 class GetSupportMessagesView(APIView):
@@ -296,8 +249,7 @@ class GetSupportMessagesView(APIView):
         try:
             session = SupportSession.objects.get(id=session_id)
         except SupportSession.DoesNotExist:
-            return Response({'error': 'Sessiya topilmadi.'}, status=status.HTTP_404_NOT_FOUND)
-
+            return Response({'error': 'Сессия не найдена.'}, status=status.HTTP_404_NOT_FOUND)
         messages = SupportMessage.objects.filter(session=session).order_by('timestamp')
         message_data = [
             {
@@ -308,6 +260,7 @@ class GetSupportMessagesView(APIView):
             for msg in messages
         ]
         return Response({'messages': message_data}, status=status.HTTP_200_OK)
+
 
 class ClientCardListCreateView(APIView):
     def get(self, request):
@@ -331,7 +284,8 @@ class ClientCardView(APIView):
             serializer = ClientCardSerializer(client_card)
             return Response(serializer.data, status=status.HTTP_200_OK)
         except ClientCard.DoesNotExist:
-            return Response({'error': 'Kartangiz topilmadi. Iltimos, yangi karta yarating.'}, status=status.HTTP_404_NOT_FOUND)
+            return Response({'error': 'Ваша карта не найдена. Пожалуйста, создайте новую карту.'},
+                            status=status.HTTP_404_NOT_FOUND)
 
     def post(self, request, telegram_id):
         user = get_object_or_404(User, telegram_id=telegram_id)
@@ -340,3 +294,10 @@ class ClientCardView(APIView):
             serializer.save(user=user)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class AdviceView(APIView):
+    def get(self, request):
+        advice = Advice.objects.all()
+        serializer = AdviceSerializer(advice, many=True)
+        return Response({"advice": serializer.data}, status=status.HTTP_200_OK)

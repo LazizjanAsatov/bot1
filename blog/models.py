@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 from django.db import models
 from django.utils import timezone
 
@@ -16,7 +18,8 @@ class User(models.Model):
 class Consent(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='consents')
     consent_given = models.BooleanField(default=False)
-    consent_date = models.DateTimeField(default=timezone.now)
+    consent_date = models.DateTimeField(default=timezone.now,null=True,blank=True)
+    pdf_file = models.FileField(upload_to='consents/', blank=True, null=True)
 
     def __str__(self):
         return f"Rozilik: {self.user.username} - {self.consent_given}"
@@ -27,6 +30,7 @@ class SubscriptionPlan(models.Model):
     description = models.TextField()
     price = models.DecimalField(max_digits=10, decimal_places=2)
     duration_days = models.IntegerField()
+    renewable = models.BooleanField(default=True)
 
     def __str__(self):
         return self.name
@@ -42,6 +46,12 @@ class UserSubscription(models.Model):
         if not self.end_date:
             self.end_date = self.start_date + timezone.timedelta(days=self.plan.duration_days)
         super(UserSubscription, self).save(*args, **kwargs)
+
+    def is_expiring_soon(self):
+        return self.end_date - timezone.now() <= timedelta(days=7)
+
+    def __str__(self):
+        return f"{self.user} - {self.plan.name}"
 
     def __str__(self):
         return f"{self.user} - {self.plan.name}"
@@ -118,3 +128,11 @@ class ClientCard(models.Model):
 
     def str(self):
         return f"ClientCard for {self.user.username}"
+
+
+class Advice(models.Model):
+    title = models.CharField(max_length=100)
+    content = models.TextField()
+
+    def __str__(self):
+        return self.title
