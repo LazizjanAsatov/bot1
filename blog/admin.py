@@ -1,5 +1,7 @@
 from django.contrib import admin
-from .models import User, Consent, SubscriptionPlan, UserSubscription, PaymentMethod, Payment, Method, UserCard, SupportSession, SupportMessage, ClientCard, Advice
+
+from .models import User, Consent, SubscriptionPlan, UserSubscription, PaymentMethod, Payment, Method, UserCard, \
+    SupportSession, SupportMessage, ClientCard, Advice, GiftedSubscription
 
 
 @admin.register(User)
@@ -33,6 +35,7 @@ class UserSubscriptionAdmin(admin.ModelAdmin):
 
     def is_expiring_soon(self, obj):
         return obj.is_expiring_soon()
+
     is_expiring_soon.boolean = True  # True yoki False ko'rinishida chiqaradi
     is_expiring_soon.short_description = 'Tez orada tugaydi'
 
@@ -88,3 +91,6 @@ class ClientCardAdmin(admin.ModelAdmin):
 class AdviceAdmin(admin.ModelAdmin):
     list_display = ('title', 'content')
     search_fields = ('title',)
+
+
+admin.site.register(GiftedSubscription)

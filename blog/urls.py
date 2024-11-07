@@ -2,7 +2,7 @@ from django.urls import path
 from .views import UserRegistrationView, ConsentView, SubscriptionPlanListView, SubscribeView, SubscriptionStatusView, \
     PaymentMethodListView, MakePaymentView, PaymentStatusView, ConsentStatusView, MethodsListView, MethodDetailView, \
     StatisticsView, ProfileView, UserCardView, StartSupportSessionView, SendSupportMessageView, GetSupportMessagesView, \
-    ClientCardView, AdviceView
+    ClientCardView, AdviceView, GiftSubscriptionView
 
 urlpatterns = [
     path('register/', UserRegistrationView.as_view(),name='register'),
@@ -10,6 +10,7 @@ urlpatterns = [
     path('consent-status/<str:telegram_id>/', ConsentStatusView.as_view(), name='consent-status'),
     path('subscription-plans/', SubscriptionPlanListView.as_view(), name='subscription-plans'),
     path('subscribe/<str:telegram_id>/', SubscribeView.as_view(), name='subscribe'),
+    path('gift-subscription/<int:telegram_id>/', GiftSubscriptionView.as_view(), name='gift_subscription'),
     path('subscription-status/<str:telegram_id>/', SubscriptionStatusView.as_view(), name='subscription-status'),
     path('payment-methods/', PaymentMethodListView.as_view(), name='payment-methods'),
     path('make-payment/<str:telegram_id>/', MakePaymentView.as_view(), name='make-payment'),

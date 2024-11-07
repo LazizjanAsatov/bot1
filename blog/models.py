@@ -18,7 +18,7 @@ class User(models.Model):
 class Consent(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='consents')
     consent_given = models.BooleanField(default=False)
-    consent_date = models.DateTimeField(default=timezone.now,null=True,blank=True)
+    consent_date = models.DateTimeField(default=timezone.now, null=True, blank=True)
     pdf_file = models.FileField(upload_to='consents/', blank=True, null=True)
 
     def __str__(self):
@@ -55,6 +55,16 @@ class UserSubscription(models.Model):
 
     def __str__(self):
         return f"{self.user} - {self.plan.name}"
+
+
+class GiftedSubscription(models.Model):
+    sender = models.ForeignKey(User, on_delete=models.CASCADE, related_name='sent_gifts')
+    recipient = models.ForeignKey(User, on_delete=models.CASCADE, related_name='received_gifts')
+    plan = models.ForeignKey(SubscriptionPlan, on_delete=models.CASCADE)
+    gifted_on = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.sender} gifted {self.plan.name} to {self.recipient}"
 
 
 class PaymentMethod(models.Model):

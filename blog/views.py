@@ -5,7 +5,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from .models import User, SubscriptionPlan, UserSubscription, Payment, PaymentMethod, Consent, Method, SupportSession, \
-    SupportMessage, ClientCard, Advice
+    SupportMessage, ClientCard, Advice, GiftedSubscription
 from .serializers import UserRegistrationSerializer, ConsentSerializer, UserSubscriptionSerializer, \
     SubscriptionPlanSerializer, PaymentSerializer, PaymentMethodSerializer, MethodSerializer, UserCardSerializer, \
     ClientCardSerializer, AdviceSerializer
@@ -84,6 +84,49 @@ class SubscribeView(APIView):
         user_subscription = UserSubscription.objects.create(user=user, plan=plan)
         serializer = UserSubscriptionSerializer(user_subscription)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+
+class GiftSubscriptionView(APIView):
+    def post(self, request, telegram_id):
+        try:
+            sender = User.objects.get(telegram_id=telegram_id)
+        except User.DoesNotExist:
+            return Response({'error': 'Foydalanuvchi topilmadi.'}, status=status.HTTP_404_NOT_FOUND)
+
+        recipient_username = request.data.get('recipient_username')
+        plan_id = request.data.get('plan_id')
+        transaction_id = request.data.get('transaction_id')
+
+        if not recipient_username:
+            return Response({'error': 'Sovgʻa qabul qiluvchining username kiriting.'},
+                            status=status.HTTP_400_BAD_REQUEST)
+        if not plan_id:
+            return Response({'error': 'Obuna rejasini ID kiriting.'}, status=status.HTTP_400_BAD_REQUEST)
+        if not transaction_id:
+            return Response({'error': 'Tranzaksiya ID kiriting.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            recipient = User.objects.get(username=recipient_username)
+        except User.DoesNotExist:
+            return Response({'error': 'Qabul qiluvchi topilmadi.'}, status=status.HTTP_404_NOT_FOUND)
+
+        try:
+            plan = SubscriptionPlan.objects.get(id=plan_id)
+        except SubscriptionPlan.DoesNotExist:
+            return Response({'error': 'Obuna rejasi topilmadi.'}, status=status.HTTP_404_NOT_FOUND)
+        GiftedSubscription.objects.create(sender=sender, recipient=recipient, plan=plan)
+
+        UserSubscription.objects.create(
+            user=recipient,
+            plan=plan,
+            start_date=timezone.now(),
+            end_date=timezone.now() + timezone.timedelta(days=plan.duration_days)
+        )
+
+        return Response(
+            {"message": f"'{plan.name}' obunasi {recipient.username} foydalanuvchisiga sovgʻa qilindi."},
+            status=status.HTTP_201_CREATED
+        )
 
 
 class SubscriptionStatusView(APIView):

@@ -54,6 +54,10 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
+CORS_ORIGIN_ALLOW_ALL = True
+
+BACKEND_URL = "http://localhost:8000/blog/"
+
 ROOT_URLCONF = 'config.urls'
 
 TEMPLATES = [

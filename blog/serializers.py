@@ -105,3 +105,5 @@ class AdviceSerializer(serializers.ModelSerializer):
     class Meta:
         model = Advice
         fields = ['id', 'title', 'content']
+
+
